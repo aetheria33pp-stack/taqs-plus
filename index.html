@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -29,6 +28,10 @@
     <!-- أيقونات FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 
+    <!-- مكتبة خرائط Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
         body {
             font-family: 'Cairo', sans-serif;
@@ -50,12 +53,11 @@
 
         #weather-map {
             width: 100%;
-            height: 390px;
+            height: 360px;
             z-index: 10;
             border-radius: 1.25rem;
         }
 
-        /* خلفيات الفيديو والأنيميشن الديناميكية حسب الطقس */
         .hero-weather-bg {
             position: relative;
             overflow: hidden;
@@ -100,9 +102,7 @@
 </head>
 <body class="bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen pb-24 transition-colors duration-300">
 
-    <!-- =====================================================================
-         الشريط العلوي الثابت
-         ===================================================================== -->
+    <!-- الشريط العلوي الثابت -->
     <header class="sticky top-0 z-40 bg-sky-950/95 dark:bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 shadow-md">
         <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
             <button onclick="toggleTempUnit()" id="header-unit-btn" class="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center font-extrabold text-sm transition" title="تبديل وحدة الحرارة">
@@ -124,14 +124,10 @@
         </div>
     </header>
 
-    <!-- =====================================================================
-         المحتوى الرئيسي
-         ===================================================================== -->
+    <!-- المحتوى الرئيسي -->
     <main class="max-w-3xl mx-auto">
 
-        <!-- -----------------------------------------------------------------
-             1. تبويب: موقعك
-             ----------------------------------------------------------------- -->
+        <!-- 1. تبويب: موقعك -->
         <section id="tab-location" class="tab-panel space-y-4">
             <div id="hero-card" class="hero-weather-bg theme-clear text-white px-4 pt-4 pb-6 rounded-b-[2rem] shadow-xl">
                 <canvas id="weather-video-canvas"></canvas>
@@ -186,7 +182,7 @@
             </div>
 
             <div class="px-4 space-y-4">
-                <!-- شريط الإنذار التلقائي (0-7 أخضر | 7-15 برتقالي | +15 أحمر) -->
+                <!-- شريط الإنذار التلقائي -->
                 <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-3">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
@@ -323,4 +319,348 @@
                             <div>
                                 <div class="text-[11px] text-slate-500 dark:text-slate-400">أعلى درجة حرارة</div>
                                 <div id="ana-max-t" class="font-extrabold text-sm mt-0.5">--°</div>
-                            
+                                <div id="ana-max-t-day" class="text-[10px] text-slate-400">--</div>
+                            </div>
+                            <i class="fa-solid fa-temperature-high text-rose-500 text-xl"></i>
+                        </div>
+
+                        <div class="bg-sky-50/70 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/40 rounded-2xl p-3 flex items-center just
+                                <script>
+        const CITIES = [
+            { name: 'بغداد، العراق', lat: 33.3152, lon: 44.3661, elev: 34 },
+            { name: 'الموصل، العراق', lat: 36.3489, lon: 43.1189, elev: 223 },
+            { name: 'أربيل، العراق', lat: 36.1911, lon: 44.0092, elev: 410 },
+            { name: 'كركوك، العراق', lat: 35.4681, lon: 44.3922, elev: 331 },
+            { name: 'الرمادي، العراق', lat: 33.4262, lon: 43.2957, elev: 52 },
+            { name: 'الرطبة، العراق', lat: 33.0381, lon: 40.2858, elev: 615 },
+            { name: 'كربلاء، العراق', lat: 32.6160, lon: 44.0249, elev: 29 },
+            { name: 'النجف، العراق', lat: 31.9996, lon: 44.3267, elev: 60 },
+            { name: 'الديوانية، العراق', lat: 31.9922, lon: 44.9255, elev: 25 },
+            { name: 'البصرة، العراق', lat: 30.5085, lon: 47.7804, elev: 5 },
+            { name: 'الرياض، السعودية', lat: 24.7136, lon: 46.6753, elev: 612 },
+            { name: 'عمّان، الأردن', lat: 31.9454, lon: 35.9284, elev: 770 },
+            { name: 'القاهرة، مصر', lat: 30.0444, lon: 31.2357, elev: 23 },
+            { name: 'دبي، الإمارات', lat: 25.2048, lon: 55.2708, elev: 5 }
+        ];
+
+        const state = {
+            city: CITIES[0],
+            model: 'gfs_seamless',
+            unit: 'C',
+            dark: false,
+            weatherData: null,
+            aqiValue: 1,
+            map: null,
+            mapMarker: null,
+            mapLayer: 'temp',
+            dailyList: []
+        };
+
+        function formatTemp(cVal) {
+            if (cVal === null || cVal === undefined || Number.isNaN(cVal)) return '--°';
+            const val = state.unit === 'F' ? Math.round((cVal * 9) / 5 + 32) : Math.round(cVal);
+            return `${val}°`;
+        }
+
+        function decodeWmo(code) {
+            if (code === 0) return { desc: 'صافي', icon: '<i class="fa-solid fa-sun text-amber-300"></i>', theme: 'theme-clear' };
+            if ([1, 2].includes(code)) return { desc: 'غائم جزئياً', icon: '<i class="fa-solid fa-cloud-sun text-amber-200"></i>', theme: 'theme-clear' };
+            if (code === 3) return { desc: 'غائم', icon: '<i class="fa-solid fa-cloud text-slate-200"></i>', theme: 'theme-cloudy' };
+            if ([45, 48].includes(code)) return { desc: 'ضباب', icon: '<i class="fa-solid fa-smog text-slate-200"></i>', theme: 'theme-fog' };
+            if ([51, 53, 55, 56, 57, 61, 63, 66, 80, 81].includes(code)) return { desc: 'أمطار', icon: '<i class="fa-solid fa-cloud-rain text-sky-300"></i>', theme: 'theme-rain' };
+            if ([65, 67, 82].includes(code)) return { desc: 'أمطار غزيرة', icon: '<i class="fa-solid fa-cloud-showers-heavy text-blue-300"></i>', theme: 'theme-rain' };
+            if ([71, 73, 75, 77, 85, 86].includes(code)) return { desc: 'ثلوج', icon: '<i class="fa-regular fa-snowflake text-cyan-200"></i>', theme: 'theme-snow' };
+            if ([95, 96, 99].includes(code)) return { desc: 'عواصف رعدية', icon: '<i class="fa-solid fa-bolt text-yellow-300"></i>', theme: 'theme-storm' };
+            return { desc: 'متقلب', icon: '<i class="fa-solid fa-cloud-sun text-amber-200"></i>', theme: 'theme-clear' };
+        }
+
+        function initCanvasAnimation() {
+            const canvas = document.getElementById('weather-video-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const drops = Array.from({ length: 36 }, () => ({
+                x: Math.random() * 600,
+                y: Math.random() * 300,
+                len: 8 + Math.random() * 12,
+                speed: 4 + Math.random() * 5
+            }));
+
+            function draw() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                canvas.width = rect.width || 400;
+                canvas.height = rect.height || 260;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const code = state.weatherData?.current?.weather_code ?? 0;
+                if ([51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99].includes(code)) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+                    ctx.lineWidth = 1.4;
+                    drops.forEach(d => {
+                        ctx.beginPath();
+                        ctx.moveTo(d.x, d.y);
+                        ctx.lineTo(d.x - 2, d.y + d.len);
+                        ctx.stroke();
+                        d.y += d.speed;
+                        d.x -= 0.7;
+                        if (d.y > canvas.height) {
+                            d.y = -15;
+                            d.x = Math.random() * canvas.width;
+                        }
+                    });
+                }
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        async function fetchWithTimeout(url, ms = 10000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), ms);
+            try {
+                const res = await fetch(url, { signal: controller.signal });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        async function fetchWeatherData() {
+            const summaryEl = document.getElementById('hero-summary');
+            const anaBox = document.getElementById('ana-summary-box');
+            if (summaryEl) summaryEl.textContent = 'جاري تحديث بيانات النماذج العددية...';
+
+            const weatherUrl =
+                `https://api.open-meteo.com/v1/forecast?latitude=${state.city.lat}&longitude=${state.city.lon}` +
+                `&models=${state.model}` +
+                `&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,surface_pressure,wind_speed_10m` +
+                `&hourly=temperature_2m,weather_code,precipitation` +
+                `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max` +
+                `&forecast_days=15&timezone=auto`;
+
+            const aqiUrl =
+                `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${state.city.lat}&longitude=${state.city.lon}&current=european_aqi`;
+
+            try {
+                const [wData, aqiData] = await Promise.all([
+                    fetchWithTimeout(weatherUrl, 12000),
+                    fetchWithTimeout(aqiUrl, 7000).catch(() => null)
+                ]);
+
+                state.weatherData = wData;
+                state.aqiValue = aqiData?.current?.european_aqi ?? 1;
+                renderAll();
+
+                const nowStr = new Date().toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+                const updEl = document.getElementById('settings-last-update');
+                if (updEl) updEl.textContent = `آخر تحديث: ${nowStr}`;
+            } catch (err) {
+                const reason = err.name === 'AbortError' ? 'انتهت مهلة الاتصال بالنموذج' : 'تعذر الوصول إلى خادم البيانات';
+                if (summaryEl) {
+                    summaryEl.textContent = `${reason} — اضغط «تحديث الآن» من الإعدادات أو أعد المحاولة.`;
+                }
+                if (anaBox) {
+                    anaBox.textContent = `تنبيه الاتصال: ${reason}. تحقق من الإنترنت أو بدّل النموذج بين جفس والأوروبي.`;
+                }
+            }
+        }
+
+        function renderAll() {
+            const d = state.weatherData;
+            if (!d || !d.current) return;
+
+            document.getElementById('header-city-name').textContent = state.city.name;
+            document.getElementById('alerts-city-tag').textContent = state.city.name;
+            document.getElementById('hero-elevation').textContent = `${Math.round(d.elevation ?? state.city.elev)} m`;
+
+            const isEcmwf = state.model === 'ecmwf_ifs025';
+            document.getElementById('hero-model-ecmwf').className = isEcmwf
+                ? 'px-3 py-1 rounded-full font-bold transition bg-sky-500 text-white shadow flex items-center gap-1'
+                : 'px-3 py-1 rounded-full font-bold transition text-white/80 hover:text-white';
+            document.getElementById('hero-model-gfs').className = !isEcmwf
+                ? 'px-3 py-1 rounded-full font-bold transition bg-sky-500 text-white shadow flex items-center gap-1'
+                : 'px-3 py-1 rounded-full font-bold transition text-white/80 hover:text-white';
+            document.getElementById('days15-model').textContent = isEcmwf ? 'ECMWF' : 'GFS';
+
+            const cur = d.current;
+            const info = decodeWmo(cur.weather_code);
+            const heroCard = document.getElementById('hero-card');
+            heroCard.className = `hero-weather-bg ${info.theme} text-white px-4 pt-4 pb-6 rounded-b-[2rem] shadow-xl`;
+
+            const flashEl = document.getElementById('storm-flash');
+            if ([95, 96, 99].includes(cur.weather_code)) flashEl.classList.remove('hidden');
+            else flashEl.classList.add('hidden');
+
+            document.getElementById('hero-main-icon').innerHTML = info.icon;
+            document.getElementById('hero-temp').textContent = formatTemp(cur.temperature_2m);
+            document.getElementById('hero-desc').textContent = info.desc;
+
+            const daily = d.daily || {};
+            const tMax0 = daily.temperature_2m_max?.[0];
+            const tMin0 = daily.temperature_2m_min?.[0];
+            document.getElementById('hero-tmax').textContent = formatTemp(tMax0);
+            document.getElementById('hero-tmin').textContent = formatTemp(tMin0);
+
+            const hourly = d.hourly || {};
+            const strip = document.getElementById('hourly-strip');
+            strip.innerHTML = '';
+            const times = hourly.time || [];
+            const nowIdx = Math.max(0, times.findIndex(t => new Date(t) >= new Date(Date.now() - 3600000)));
+            const sliceEnd = Math.min(times.length, nowIdx + 12);
+
+            let rain24 = 0;
+            for (let i = nowIdx; i < Math.min(times.length, nowIdx + 24); i++) {
+                rain24 += Number(hourly.precipitation?.[i] || 0);
+            }
+
+            for (let i = nowIdx; i < sliceEnd; i++) {
+                const hInfo = decodeWmo(hourly.weather_code?.[i] ?? 0);
+                const label = i === nowIdx ? 'الآن' : new Date(times[i]).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+                const item = document.createElement('div');
+                item.className = 'min-w-[64px] py-1.5 px-2 rounded-xl bg-white/10 flex flex-col items-center gap-1 shrink-0';
+                item.innerHTML = `
+                    <span class="text-[11px] font-bold opacity-90">${label}</span>
+                    <span class="text-lg">${hInfo.icon}</span>
+                    <span class="text-xs font-black" dir="ltr">${formatTemp(hourly.temperature_2m?.[i])}</span>
+                `;
+                strip.appendChild(item);
+            }
+
+            document.getElementById('hero-summary').textContent =
+                `الحالة ${info.desc} في ${state.city.name}، الرياح ${Math.round(cur.wind_speed_10m ?? 0)} كم/س والهطول المتوقع خلال 24 ساعة ${rain24.toFixed(1)} ملم.`;
+
+            renderAlertsAndCards(rain24, cur);
+            renderExtraDetails(cur);
+            render15Days(daily);
+            renderAnalytics(daily);
+            updateMapMarker();
+        }
+
+        function renderAlertsAndCards(rain24, cur) {
+            document.getElementById('loc-rain-badge').textContent = `${rain24.toFixed(1)} ملم`;
+            document.getElementById('card-precip').textContent = `${rain24.toFixed(1)} ملم`;
+            document.getElementById('card-precip-bar').style.width = `${Math.min(100, Math.max(5, (rain24 / 20) * 100))}%`;
+
+            document.getElementById('card-feels').textContent = formatTemp(cur.apparent_temperature);
+            const feelsPct = Math.min(100, Math.max(10, ((Number(cur.apparent_temperature ?? 20) + 10) / 55) * 100));
+            document.getElementById('card-feels-bar').style.width = `${feelsPct}%`;
+
+            const g = document.getElementById('lvl-green');
+            const o = document.getElementById('lvl-orange');
+            const r = document.getElementById('lvl-red');
+            const baseInactive = 'py-2 px-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-400 flex items-center justify-center gap-1.5';
+
+            g.className = baseInactive;
+            o.className = baseInactive;
+            r.className = baseInactive;
+
+            const badge = document.getElementById('header-alert-badge');
+            const msgEl = document.getElementById('loc-alert-msg');
+            const alertCard = document.getElementById('alerts-main-card');
+            const alertTitle = document.getElementById('alerts-level-title');
+            const alertRain = document.getElementById('alerts-rain-val');
+            const alertDesc = document.getElementById('alerts-desc');
+
+            alertRain.textContent = `${rain24.toFixed(1)} ملم / 24س`;
+
+            if (rain24 >= 15) {
+                r.className = 'py-2 px-2 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 flex items-center justify-center gap-1.5';
+                badge.className = 'absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-sky-950';
+                msgEl.textContent = 'تنبيه أحمر: هطول غزير متوقع خلال 24 ساعة، يُنصح بأخذ الحيطة وتجنب المناطق المنخفضة.';
+                alertCard.className = 'alert-pulse rounded-2xl p-4 border-2 border-red-500 bg-red-50 dark:bg-red-950/40 space-y-2';
+                alertTitle.className = 'font-black text-sm sm:text-base text-red-700 dark:text-red-300';
+                alertTitle.textContent = 'المستوى الأحمر — هطول غزير';
+                alertDesc.textContent = `كمية الهطول المتوقعة خلال 24 ساعة تبلغ ${rain24.toFixed(1)} ملم. يُنصح بالحذر الشديد ومتابعة التطورات.`;
+            } else if (rain24 >= 7) {
+                o.className = 'py-2 px-2 rounded-xl border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 flex items-center justify-center gap-1.5';
+                badge.className = 'absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-sky-950';
+                msgEl.textContent = 'تنبيه برتقالي: فرص أمطار متوسطة خلال 24 ساعة مع احتمال نشاط للرياح.';
+                alertCard.className = 'alert-pulse rounded-2xl p-4 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/40 space-y-2';
+                alertTitle.className = 'font-black text-sm sm:text-base text-amber-700 dark:text-amber-300';
+                alertTitle.textContent = 'المستوى البرتقالي — أمطار متوسطة';
+                alertDesc.textContent = `الهطول المتوقع خلال 24 ساعة يقارب ${rain24.toFixed(1)} ملم. يُستحسن الانتباه أثناء القيادة.`;
+            } else {
+                g.className = 'py-2 px-2 rounded-xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1.5';
+                badge.className = 'absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-sky-950';
+                msgEl.textContent = 'أجواء مستقرة إلى أمطار خفيفة ضمن الحدود الآمنة.';
+                alertCard.className = 'alert-pulse rounded-2xl p-4 border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 space-y-2';
+                alertTitle.className = 'font-black text-sm sm:text-base text-emerald-700 dark:text-emerald-300';
+                alertTitle.textContent = 'المستوى الأخضر — مستقر';
+                alertDesc.textContent = 'لا توجد تنبيهات جوية خطرة متوقعة خلال الساعات القادمة على المنطقة المختارة.';
+            }
+        }
+
+        function renderExtraDetails(cur) {
+            document.getElementById('det-humidity').textContent = `${Math.round(cur.relative_humidity_2m ?? 0)}%`;
+            document.getElementById('det-wind').textContent = `${Math.round(cur.wind_speed_10m ?? 0)} كم/س`;
+            document.getElementById('det-pressure').textContent = `${Math.round(cur.surface_pressure ?? 1013)} hPa`;
+            const aqi = Math.round(state.aqiValue || 1);
+            const aqiLabel = aqi <= 20 ? 'نقي' : aqi <= 40 ? 'مقبول' : 'مرتفع';
+            document.getElementById('det-aqi').textContent = `${aqiLabel} (AQI ${aqi})`;
+        }
+
+        function render15Days(daily) {
+            const listEl = document.getElementById('forecast-15-list');
+            listEl.innerHTML = '';
+            state.dailyList = [];
+
+            const days = daily.time || [];
+            for (let i = 0; i < days.length; i++) {
+                const dateObj = new Date(days[i] + 'T12:00:00');
+                const dayName = i === 0 ? 'اليوم' : i === 1 ? 'غداً' : dateObj.toLocaleDateString('ar-IQ', { weekday: 'long' });
+                const dateLabel = dateObj.toLocaleDateString('ar-IQ', { day: 'numeric', month: 'short' });
+                const code = daily.weather_code?.[i] ?? 0;
+                const info = decodeWmo(code);
+                const maxT = daily.temperature_2m_max?.[i];
+                const minT = daily.temperature_2m_min?.[i];
+                const rain = Number(daily.precipitation_sum?.[i] ?? 0);
+                const wind = Number(daily.wind_speed_10m_max?.[i] ?? 0);
+
+                state.dailyList.push({ dayName, dateLabel, desc: info.desc, maxT, minT, rain, wind });
+
+                const row = document.createElement('button');
+                row.onclick = () => openDayModal(i);
+                row.className = 'w-full py-3 flex items-center justify-between gap-2 text-right hover:bg-slate-50 dark:hover:bg-slate-800/40 px-2 rounded-xl transition';
+                row.innerHTML = `
+                    <div class="w-24">
+                        <div class="font-extrabold text-xs sm:text-sm">${dayName}</div>
+                        <div class="text-[10px] text-slate-400">${dateLabel}</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">${info.icon}</span>
+                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${info.desc}</span>
+                    </div>
+                    <div class="text-xs font-black text-sky-600 dark:text-sky-400 min-w-[58px] text-center">
+                        ${rain > 0 ? `${rain.toFixed(1)} ملم` : '0.0 ملم'}
+                    </div>
+                    <div class="font-black text-xs sm:text-sm" dir="ltr">
+                        <span class="text-rose-500">${formatTemp(maxT)}</span>
+                        <span class="text-slate-400 mx-1">/</span>
+                        <span class="text-sky-500">${formatTemp(minT)}</span>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            }
+        }
+
+        function renderAnalytics(daily) {
+            const maxArr = daily.temperature_2m_max || [];
+            const minArr = daily.temperature_2m_min || [];
+            const rainArr = daily.precipitation_sum || [];
+            const windArr = daily.wind_speed_10m_max || [];
+
+            if (!maxArr.length) return;
+
+            let maxTIdx = 0;
+            for (let i = 1; i < maxArr.length; i++) if (maxArr[i] > maxArr[maxTIdx]) maxTIdx = i;
+
+            let minTIdx = 0;
+            for (let i = 1; i < minArr.length; i++) if (minArr[i] < minArr[minTIdx]) minTIdx = i;
+
+            let maxRIdx = 0;
+            for (let i = 1; i < rainArr.length; i++) if (rainArr[i] > rainArr[maxRIdx]) maxRIdx = i;
+
+            let maxWIdx = 0;
+            for (let i = 1; i < windArr.length; i++) if (windArr[i] > windArr[maxWIdx]) maxWIdx = i;
+
+            const fmtDay = idx => state.dailyList[idx] ? `${state.dailyList[idx].dayName} (${state.dail
