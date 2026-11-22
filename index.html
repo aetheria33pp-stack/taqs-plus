@@ -1,0 +1,326 @@
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>طقس بلس — المركز العربي للرصد والمناخ</title>
+
+    <!-- خط Cairo العربي -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'sans-serif'],
+                    }
+                }
+            }
+        };
+    </script>
+
+    <!-- أيقونات FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.45);
+            border-radius: 9999px;
+        }
+
+        #weather-map {
+            width: 100%;
+            height: 390px;
+            z-index: 10;
+            border-radius: 1.25rem;
+        }
+
+        /* خلفيات الفيديو والأنيميشن الديناميكية حسب الطقس */
+        .hero-weather-bg {
+            position: relative;
+            overflow: hidden;
+            transition: background 0.9s ease;
+        }
+        .theme-clear { background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 55%, #38bdf8 100%); }
+        .theme-cloudy { background: linear-gradient(135deg, #334155 0%, #475569 55%, #64748b 100%); }
+        .theme-rain { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #1d4ed8 100%); }
+        .theme-storm { background: linear-gradient(135deg, #090d16 0%, #2e1065 55%, #1e1b4b 100%); }
+        .theme-snow { background: linear-gradient(135deg, #1e293b 0%, #475569 55%, #94a3b8 100%); }
+        .theme-fog { background: linear-gradient(135deg, #374151 0%, #4b5563 55%, #6b7280 100%); }
+
+        #weather-video-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes lightning-flash {
+            0%, 91%, 95%, 100% { background-color: rgba(255, 255, 255, 0); }
+            92%, 96% { background-color: rgba(255, 255, 255, 0.34); }
+        }
+        .storm-flash {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+            animation: lightning-flash 5.5s infinite;
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.015); }
+        }
+        .alert-pulse {
+            animation: alert-pulse 2.2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen pb-24 transition-colors duration-300">
+
+    <!-- =====================================================================
+         الشريط العلوي الثابت
+         ===================================================================== -->
+    <header class="sticky top-0 z-40 bg-sky-950/95 dark:bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 shadow-md">
+        <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
+            <button onclick="toggleTempUnit()" id="header-unit-btn" class="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center font-extrabold text-sm transition" title="تبديل وحدة الحرارة">
+                °C
+            </button>
+
+            <button onclick="openCityModal()" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-full transition max-w-[66%]">
+                <i class="fa-solid fa-chevron-down text-xs opacity-80"></i>
+                <span id="header-city-name" class="font-extrabold text-sm sm:text-base truncate">بغداد، العراق</span>
+                <i class="fa-solid fa-location-dot text-amber-400 text-sm"></i>
+            </button>
+
+            <button onclick="switchTab('alerts')" class="relative w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition" title="الإنذار المبكر">
+                <i class="fa-regular fa-bell text-lg"></i>
+                <span id="header-alert-badge" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-sky-950">
+                    1
+                </span>
+            </button>
+        </div>
+    </header>
+
+    <!-- =====================================================================
+         المحتوى الرئيسي
+         ===================================================================== -->
+    <main class="max-w-3xl mx-auto">
+
+        <!-- -----------------------------------------------------------------
+             1. تبويب: موقعك
+             ----------------------------------------------------------------- -->
+        <section id="tab-location" class="tab-panel space-y-4">
+            <div id="hero-card" class="hero-weather-bg theme-clear text-white px-4 pt-4 pb-6 rounded-b-[2rem] shadow-xl">
+                <canvas id="weather-video-canvas"></canvas>
+                <div id="storm-flash" class="hidden storm-flash"></div>
+
+                <div class="relative z-10 space-y-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div class="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-white/15">
+                            <span class="opacity-85">الارتفاع</span>
+                            <i class="fa-solid fa-arrow-up text-[10px] bg-white text-slate-900 rounded-full w-4 h-4 flex items-center justify-center"></i>
+                            <strong id="hero-elevation" dir="ltr">34 m</strong>
+                        </div>
+
+                        <div class="bg-black/30 backdrop-blur-md p-1 rounded-full flex items-center gap-1 border border-white/15">
+                            <span class="px-2 opacity-85 font-semibold">المصدر :</span>
+                            <button onclick="setModel('ecmwf_ifs025')" id="hero-model-ecmwf" class="px-3 py-1 rounded-full font-bold transition text-white/80 hover:text-white">
+                                الأوروبي
+                            </button>
+                            <button onclick="setModel('gfs_seamless')" id="hero-model-gfs" class="px-3 py-1 rounded-full font-bold transition bg-sky-500 text-white shadow flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i>
+                                <span>جفس</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between px-4 py-1">
+                        <div class="flex flex-col items-center">
+                            <div id="hero-main-icon" class="text-6xl sm:text-7xl drop-shadow-lg mb-2">
+                                <i class="fa-solid fa-sun text-amber-300"></i>
+                            </div>
+                            <div class="text-sm font-extrabold bg-black/20 px-3 py-0.5 rounded-full backdrop-blur-sm">
+                                <span id="hero-tmax" class="text-amber-300">24°</span>
+                                <span class="mx-1 opacity-70">/</span>
+                                <span id="hero-tmin" class="text-sky-200">12°</span>
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <div id="hero-temp" class="text-6xl sm:text-7xl font-black tracking-tight drop-shadow-md" dir="ltr">21°</div>
+                            <div id="hero-desc" class="text-base sm:text-lg font-bold mt-1 drop-shadow">صافي</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-black/25 backdrop-blur-md border border-white/15 rounded-2xl p-3">
+                        <div id="hourly-strip" class="flex items-center justify-between gap-3 overflow-x-auto pb-1 text-center"></div>
+                    </div>
+
+                    <div id="hero-summary" class="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl py-2.5 px-4 text-center text-xs sm:text-sm font-bold">
+                        جاري تحديث بيانات النماذج العددية...
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-4 space-y-4">
+                <!-- شريط الإنذار التلقائي (0-7 أخضر | 7-15 برتقالي | +15 أحمر) -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-xl bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </span>
+                            <h3 class="font-extrabold text-sm sm:text-base">الإنذار المطري التلقائي (24 ساعة)</h3>
+                        </div>
+                        <span id="loc-rain-badge" class="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                            0.0 ملم
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-center text-xs font-extrabold">
+                        <div id="lvl-green" class="py-2 px-2 rounded-xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            <span>أخضر (0-7)</span>
+                        </div>
+                        <div id="lvl-orange" class="py-2 px-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-400 flex items-center justify-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                            <span>برتقالي (7-15)</span>
+                        </div>
+                        <div id="lvl-red" class="py-2 px-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-400 flex items-center justify-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                            <span>أحمر (+15)</span>
+                        </div>
+                    </div>
+
+                    <p id="loc-alert-msg" class="text-xs text-slate-600 dark:text-slate-300 font-semibold">
+                        أجواء مستقرة إلى أمطار خفيفة ضمن الحدود الآمنة.
+                    </p>
+                </div>
+
+                <!-- بطاقتا الهطول والشعور الفعلي -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">هطول (24 ساعة)</span>
+                            <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                        </div>
+                        <div class="flex items-center justify-between my-3">
+                            <span id="card-precip" class="text-2xl font-black">0 ملم</span>
+                            <div class="w-11 h-11 rounded-2xl bg-sky-50 dark:bg-sky-950/60 flex items-center justify-center text-sky-500 text-xl">
+                                <i class="fa-solid fa-cloud-rain"></i>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div id="card-precip-bar" class="bg-sky-500 h-full rounded-full transition-all duration-500" style="width: 5%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-rose-50/80 to-white dark:from-rose-950/20 dark:to-slate-900 rounded-2xl p-4 shadow-sm border border-rose-200/60 dark:border-slate-800 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">الشعور الفعلي</span>
+                            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                        </div>
+                        <div class="flex items-center justify-between my-3">
+                            <span id="card-feels" class="text-2xl font-black" dir="ltr">20°</span>
+                            <div class="w-11 h-11 rounded-2xl bg-rose-100/70 dark:bg-rose-950/60 flex items-center justify-center text-rose-500 text-xl">
+                                <i class="fa-solid fa-temperature-half"></i>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-200/70 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div id="card-feels-bar" class="bg-rose-500 h-full rounded-full transition-all duration-500" style="width: 50%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- تفاصيل الطقس الإضافية -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+                    <button onclick="toggleExtraDetails()" class="w-full py-3.5 px-4 flex items-center justify-center gap-2 text-xs sm:text-sm font-extrabold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                        <span>إظهار كافة تفاصيل الطقس وجودة الهواء الآن</span>
+                        <span class="bg-sky-100 dark:bg-sky-900 text-sky-600 dark:text-sky-300 text-[10px] px-2 py-0.5 rounded-full font-black">+4</span>
+                        <i id="extra-arrow" class="fa-solid fa-chevron-down text-xs transition-transform"></i>
+                    </button>
+                    <div id="extra-grid" class="hidden grid-cols-2 sm:grid-cols-4 gap-3 p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-center">
+                        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                            <i class="fa-solid fa-droplet text-blue-500 mb-1"></i>
+                            <div class="text-[11px] text-slate-400">الرطوبة</div>
+                            <div id="det-humidity" class="font-extrabold text-sm mt-0.5">--%</div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                            <i class="fa-solid fa-wind text-teal-500 mb-1"></i>
+                            <div class="text-[11px] text-slate-400">الرياح</div>
+                            <div id="det-wind" class="font-extrabold text-sm mt-0.5">-- كم/س</div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                            <i class="fa-solid fa-gauge-high text-amber-500 mb-1"></i>
+                            <div class="text-[11px] text-slate-400">الضغط</div>
+                            <div id="det-pressure" class="font-extrabold text-sm mt-0.5">-- hPa</div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                            <i class="fa-solid fa-leaf text-emerald-500 mb-1"></i>
+                            <div class="text-[11px] text-slate-400">جودة الهواء</div>
+                            <div id="det-aqi" class="font-extrabold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">نقي (AQI 1)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- جدول الطقس لـ 15 يوماً -->
+                <div class="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/80 dark:border-slate-800">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
+                                <i class="fa-regular fa-calendar-days text-lg"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-extrabold text-base">الطقس لـ 15 يوم</h3>
+                                    <span id="days15-model" class="bg-blue-700 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">GFS</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400">اضغط على أي يوم لعرض التفاصيل الكاملة</p>
+                            </div>
+                        </div>
+                        <button onclick="copyWeatherSummary()" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition" title="نسخ ملخص التوقعات">
+                            <i class="fa-solid fa-share-nodes text-sm"></i>
+                        </button>
+                    </div>
+
+                    <div id="forecast-15-list" class="divide-y divide-slate-100 dark:divide-slate-800/80"></div>
+                </div>
+
+                <!-- المركز التحليلي لأبرز أحداث الـ 15 يوماً -->
+                <div class="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-4">
+                    <h3 class="font-extrabold text-base flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </span>
+                        <span>المركز التحليلي — أبرز أحداث الـ 15 يوماً</span>
+                    </h3>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-rose-50/70 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 rounded-2xl p-3 flex items-center justify-between">
+                            <div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400">أعلى درجة حرارة</div>
+                                <div id="ana-max-t" class="font-extrabold text-sm mt-0.5">--°</div>
+                            
